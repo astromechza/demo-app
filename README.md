@@ -1,12 +1,23 @@
 # demo-app
 
-A small http UI echo server to use as a platform engineering example application.
+A small http UI echo server to use as a platform engineering example application. This listens with HTTP on port `8080`
+and outputs various facts about the request and server.
 
 ![screenshot of demo-app](./screenshot.png)
 
-## Docker image
+## Docker image for Linux
 
-TODO
+```sh
+docker pull ghcr.io/astromechza/demo-app:v0.1.0
+```
+
+## Go binary
+
+To install the binary into your own image or system, do the following and it should be available on `$GOPATH/bin/demo-app`.
+
+```
+go install github.com/astromechza/demo-app@v0.1.0
+```
 
 ## Options
 
