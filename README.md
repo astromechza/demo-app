@@ -16,7 +16,7 @@ and can output various facts about the request and server. This is great for dem
 ## Docker image for Linux
 
 ```sh
-docker pull ghcr.io/astromechza/demo-app:v0.1.0
+docker pull ghcr.io/astromechza/demo-app:latest
 ```
 
 ## Go binary
@@ -24,7 +24,7 @@ docker pull ghcr.io/astromechza/demo-app:v0.1.0
 To install the binary into your own image or system, do the following and it should be available on `$GOPATH/bin/demo-app`.
 
 ```
-go install github.com/astromechza/demo-app@v0.1.0
+go install github.com/astromechza/demo-app@latest
 ```
 
 ## Options
