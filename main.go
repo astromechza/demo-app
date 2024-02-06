@@ -48,6 +48,9 @@ type Globals struct {
 	requestCount  uint64
 	RuntimeExtras map[string]interface{}
 	Interfaces    map[string]string
+	Args          string
+	Uid           int
+	Gid           int
 }
 
 func (g *Globals) GetRequestCount() uint64 {
@@ -96,9 +99,13 @@ func mainInner() error {
 
 	DefaultGlobals.Motd = *motdString
 	DefaultGlobals.Pid = os.Getpid()
+	DefaultGlobals.Args = strings.Join(os.Args, " ")
 	DefaultGlobals.BackgroundColor = *backgroundColor
 	DefaultGlobals.StartedAt = time.Now().Format(time.RFC3339)
 	DefaultGlobals.Environment = os.Environ()
+	DefaultGlobals.Uid = os.Geteuid()
+	DefaultGlobals.Gid = os.Getgid()
+
 	sort.Strings(DefaultGlobals.Environment)
 	DefaultGlobals.RuntimeExtras = map[string]interface{}{
 		"GOOS":      runtime.GOOS,
@@ -255,17 +262,24 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
 	  <li>Show properties of the request connection and headers</li>
 	  <li>Show properties of the deployment environment and lifecycle</li>
 	  <li>Proxy chain to other demo-app instances up to 5 deep</li>
+      <li>Automatically refresh every 5 seconds</li>
   </ul>
+  Github Repo: <a target="_blank" href="https://github.com/astromechza/demo-app">https://github.com/astromechza/demo-app</a>.<br /><br />
+  To change the message of the day, redeploy with <code>--motd=..</code> or <code>$OVERRIDE_MOTD=..</code> or to change the background color, redeploy with <code>--color=..</code> or <code>$OVERRIDE_COLOR=..</code> .
   </p>
 
  <hr>
- <h3>Request id:{{ .RequestId }}</h3>
+{{ if .Detail }}
+ <a href="/">Hide details</a>
+
+ <h3>Request id:{{ .RequestId }} at:{{ .RenderedAt }}</h3>
  <pre>{{ .Request }}</pre>
- This response was rendered at {{ .RenderedAt }}.
 
  <hr>
  <h3>Server hostname:{{ .Globals.Hostname }} pid:{{ .Globals.Pid }}</h3>
  <table>
+ <tr><td>Args:</td><td>{{ .Globals.Args }}</td></tr>
+ <tr><td>Uid/Gid:</td><td>{{ .Globals.Uid }}/{{ .Globals.Gid }}</td></td>
  <tr><td>Started:</td><td>{{ .Globals.StartedAt }}</td></tr>
  <tr><td>Responses:</td><td>{{ .Globals.GetRequestCount }}</td></tr>
  {{range $k, $v := .Globals.RuntimeExtras }}
@@ -287,7 +301,9 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
  <tr><td>{{ $k }}:</td><td>{{ $v }}</td></tr>
  {{end}}
  </table>
-
+{{ else }}
+  <a href="/?detail=true">Show details</a>
+{{ end }}
  </body>
 </html>`))
 
@@ -304,6 +320,7 @@ func mainPage(c echo.Context) error {
 		"RequestId":  c.Response().Header().Get("X-Request-ID"),
 		"Request":    buff.String(),
 		"RenderedAt": renderedAt,
+		"Detail":     c.Request().URL.Query().Get("detail") != "",
 	}); err != nil {
 		return errors.Wrap(err, "failed to template")
 	}
