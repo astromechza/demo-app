@@ -48,6 +48,7 @@ type Globals struct {
 	requestCount  uint64
 	RuntimeExtras map[string]interface{}
 	Interfaces    map[string]string
+	Args          string
 }
 
 func (g *Globals) GetRequestCount() uint64 {
@@ -96,6 +97,7 @@ func mainInner() error {
 
 	DefaultGlobals.Motd = *motdString
 	DefaultGlobals.Pid = os.Getpid()
+	DefaultGlobals.Args = strings.Join(os.Args, " ")
 	DefaultGlobals.BackgroundColor = *backgroundColor
 	DefaultGlobals.StartedAt = time.Now().Format(time.RFC3339)
 	DefaultGlobals.Environment = os.Environ()
@@ -256,16 +258,19 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
 	  <li>Show properties of the deployment environment and lifecycle</li>
 	  <li>Proxy chain to other demo-app instances up to 5 deep</li>
   </ul>
+  Github Repo: <a target="_blank" href="https://github.com/astromechza/demo-app">https://github.com/astromechza/demo-app</a><br />
+  To change the message of the day, redeploy with <code>--motd=..</code> or <code>$OVERRIDE_MOTD=...</code>.<br />
+  To change the background color, redeploy with <code>--color=..</code> or <code>$OVERRIDE_COLOR=...</code>.<br />
   </p>
 
  <hr>
- <h3>Request id:{{ .RequestId }}</h3>
+ <h3>Request id:{{ .RequestId }} at:{{ .RenderedAt }}</h3>
  <pre>{{ .Request }}</pre>
- This response was rendered at {{ .RenderedAt }}.
 
  <hr>
  <h3>Server hostname:{{ .Globals.Hostname }} pid:{{ .Globals.Pid }}</h3>
  <table>
+ <tr><td>Args:</td><td>{{ .Globals.Args }}</td></tr>
  <tr><td>Started:</td><td>{{ .Globals.StartedAt }}</td></tr>
  <tr><td>Responses:</td><td>{{ .Globals.GetRequestCount }}</td></tr>
  {{range $k, $v := .Globals.RuntimeExtras }}

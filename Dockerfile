@@ -7,4 +7,4 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /demo-app
 
 FROM alpine
 COPY --from=builder /demo-app /demo-app
-CMD ["/demo-app"]
+ENTRYPOINT ["/demo-app"]
