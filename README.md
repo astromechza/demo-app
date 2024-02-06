@@ -1,9 +1,17 @@
 # demo-app
 
 A small http UI echo server to use as a platform engineering example application. This listens with HTTP on port `8080`
-and outputs various facts about the request and server.
+and can output various facts about the request and server. This is great for demonstrating:
+
+- Deployment lifecycle
+- Customisation of environment variables of files in the container
+- Customisation of container resources
+- Load-balancing between replicas
+- Autoscaling based on request rate
 
 ![screenshot of demo-app](./screenshot.png)
+
+![screenshot of demo-app with extra details](./screenshot_with_details.png)
 
 ## Docker image for Linux
 
