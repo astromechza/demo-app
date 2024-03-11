@@ -8,6 +8,7 @@ and can output various facts about the request and server. This is great for dem
 - Customisation of container resources
 - Load-balancing between replicas
 - Autoscaling based on request rate
+- Demonstrating a Redis and/or Postgres connection
 
 ![screenshot of demo-app](./screenshot.png)
 
