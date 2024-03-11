@@ -15,14 +15,17 @@ import (
 	"os/signal"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sys/unix"
 )
 
@@ -58,12 +61,16 @@ func (g *Globals) GetRequestCount() uint64 {
 }
 
 var DefaultGlobals Globals
+var RedisClient *redis.Client
+var PostgresPool *pgxpool.Pool
 
 func mainInner() error {
 	listenAddress := flag.String("listen", DefaultListenAddr, "the address to listen on")
 	backgroundColor := flag.String("color", DefaultColor, "the background color to display")
 	proxyTo := flag.String("proxy", "", "forward the request to the given http or https endpoint")
 	motdString := flag.String("motd", "Hello World", "specify a message of the day, prefix with '@' to read from a file")
+	redisString := flag.String("redis", "", "Optional redis url 'redis://<user>:<pass>@<host>:<port>'")
+	postgresString := flag.String("postgres", "", "Optional postgres url 'postgres://<user>:<pass>@<host>:<port>/<database>'")
 
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -150,6 +157,24 @@ func mainInner() error {
 		DefaultGlobals.Hostname = "failed to get hostname"
 	} else {
 		DefaultGlobals.Hostname = v
+	}
+
+	if redisString != nil && *redisString != "" {
+		slog.Info("Parsing redis string", "url", *redisString)
+		opt, err := redis.ParseURL(*redisString)
+		if err != nil {
+			return errors.Wrap(err, "failed to parse redis string")
+		}
+		RedisClient = redis.NewClient(opt)
+	}
+
+	if postgresString != nil && *postgresString != "" {
+		slog.Info("Parsing postgres string", "url", *postgresString)
+		dbPool, err := pgxpool.New(context.Background(), *postgresString)
+		if err != nil {
+			return errors.Wrap(err, "failed to start postgres pool")
+		}
+		PostgresPool = dbPool
 	}
 
 	listener, err := net.Listen("tcp", *listenAddress)
@@ -251,7 +276,7 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
  <head>
   <title>Demo App</title>
   <meta charset='utf-8'>
-  <meta http-equiv="refresh" content="5">
+  <meta http-equiv="refresh" content="{{ .RefreshSeconds }}">
   <link rel="icon" href="data:;base64,iVBORw0KGgo=">
  </head>
  <body style="background:{{.Globals.BackgroundColor}}; font-family: monospace, monospace; font-size: 0.8em;">
@@ -262,11 +287,16 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
 	  <li>Show properties of the request connection and headers</li>
 	  <li>Show properties of the deployment environment and lifecycle</li>
 	  <li>Proxy chain to other demo-app instances up to 5 deep</li>
-      <li>Automatically refresh every 5 seconds</li>
+      <li>Automatically refresh every 5 (or ?refresh) seconds</li>
   </ul>
   Github Repo: <a target="_blank" href="https://github.com/astromechza/demo-app">https://github.com/astromechza/demo-app</a>.<br /><br />
   To change the message of the day, redeploy with <code>--motd=..</code> or <code>$OVERRIDE_MOTD=..</code> or to change the background color, redeploy with <code>--color=..</code> or <code>$OVERRIDE_COLOR=..</code> .
+  An optional <code>--redis</code> or <code>$OVERRIDE_REDIS</code> can provide a redis:// connection string which will be used below to increment a counter on each request.
+  An optional <code>--postgres</code> or <code>$OVERRIDE_POSTGRES</code> can Provide a postgres:// connection string which will be used to test a database. 
   </p>
+
+  <p>Redis counter result: <code>{{ .RedisResult }}</code> .</p>
+  <p>Postgres table count result: <code>{{ .PostgresResult }}</code> .</p>
 
  <hr>
 {{ if .Detail }}
@@ -315,12 +345,48 @@ func mainPage(c echo.Context) error {
 
 	renderedAt := time.Now().UTC().Format(time.RFC3339)
 
+	redisResult := "<no redis client configured>"
+	if RedisClient != nil {
+		subCtx, cancel := context.WithTimeout(c.Request().Context(), time.Second*3)
+		defer cancel()
+		v, err := RedisClient.Incr(subCtx, "counter").Result()
+		if err != nil {
+			redisResult = err.Error()
+		} else {
+			redisResult = strconv.Itoa(int(v))
+		}
+	}
+
+	pgResult := "<no postgres pool configured>"
+	if PostgresPool != nil {
+		subCtx, cancel := context.WithTimeout(c.Request().Context(), time.Second*3)
+		defer cancel()
+		var output int
+		if err := PostgresPool.QueryRow(subCtx, `
+SELECT COUNT(*) FROM information_schema.tables
+WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema');
+`).Scan(&output); err != nil {
+			pgResult = err.Error()
+		} else {
+			pgResult = strconv.Itoa(output)
+		}
+	}
+
+	var refreshSeconds int
+	refreshSeconds, _ = strconv.Atoi(c.Request().URL.Query().Get("refresh"))
+	if refreshSeconds <= 0 {
+		refreshSeconds = 5
+	}
+
 	if err := mainTemplate.Execute(c.Response(), map[string]interface{}{
-		"Globals":    &DefaultGlobals,
-		"RequestId":  c.Response().Header().Get("X-Request-ID"),
-		"Request":    buff.String(),
-		"RenderedAt": renderedAt,
-		"Detail":     c.Request().URL.Query().Get("detail") != "",
+		"Globals":        &DefaultGlobals,
+		"RequestId":      c.Response().Header().Get("X-Request-ID"),
+		"Request":        buff.String(),
+		"RenderedAt":     renderedAt,
+		"Detail":         c.Request().URL.Query().Get("detail") != "",
+		"RefreshSeconds": refreshSeconds,
+		"RedisResult":    redisResult,
+		"PostgresResult": pgResult,
 	}); err != nil {
 		return errors.Wrap(err, "failed to template")
 	}
