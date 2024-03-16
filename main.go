@@ -300,7 +300,7 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
 
  <hr>
 {{ if .Detail }}
- <a href="/">Hide details</a>
+ <a href="./">Hide details</a>
 
  <h3>Request id:{{ .RequestId }} at:{{ .RenderedAt }}</h3>
  <pre>{{ .Request }}</pre>
@@ -332,7 +332,7 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
  {{end}}
  </table>
 {{ else }}
-  <a href="/?detail=true">Show details</a>
+  <a href="./?detail=true">Show details</a>
 {{ end }}
  </body>
 </html>`))
