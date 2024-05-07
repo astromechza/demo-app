@@ -1,0 +1,26 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: demo-app
+containers:
+  main:
+    image: .
+    variables:
+      OVERRIDE_REDIS: "redis://${resources.cache.username}:${resources.cache.password}@${resources.cache.host}:${resources.cache.port}"
+      OVERRIDE_POSTGRES: "postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/${resources.db.database}"
+service:
+  ports:
+    web:
+      port: 8080
+resources:
+  dns:
+    type: dns
+  route:
+    type: route
+    params:
+      host: ${resources.dns.host}
+      path: /
+      port: 8080
+  cache:
+    type: redis
+  db:
+    type: postgres
