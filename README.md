@@ -3,12 +3,17 @@
 A small http UI echo server to use as a platform engineering example application. This listens with HTTP on port `8080`
 and can output various facts about the request and server. This is great for demonstrating:
 
-- Deployment lifecycle
-- Customisation of environment variables of files in the container
-- Customisation of container resources
-- Load-balancing between replicas
-- Autoscaling based on request rate
-- Demonstrating a Redis and/or Postgres connection
+- **Deployment lifecycle**
+  - Update the message-of-the-day or background color, redeploy, and watch the replicas update.
+- **Customisation of environment variables and files in the container**
+  - For example, a different message-of-the-day per environment.
+- **Customisation of container resources**
+  - The detailed drop down shows the platform and number of cpus available.
+- **Load-balancing between replicas**
+  - The HTTP endpoint and readiness checks can be used as a load balancing target.
+  - The HTTP page reloads itself every few seconds to continuously generate requests.
+- **Demonstrating a Redis and/or Postgres connection**
+  - A counter is stored in Redis, and a query is performed against postgres to validate the connection.
 
 ![screenshot of demo-app](./screenshot.png)
 
@@ -45,4 +50,16 @@ The following flags are available and may also be set through the `OVERRIDE_<fla
     	forward the request to the given http or https endpoint
   -redis string
     	Optional redis url 'redis://<user>:<pass>@<host>:<port>'
+```
+
+## Running with Score
+
+A [Score](https://score.dev/) file is provided in [score.yaml](./score.yaml) which can be used to easily run this demo
+with the postgres and redis provisioned.
+
+```
+score-compose init
+score-compose generate score.yaml --image ghcr.io/astromechza/demo-app:latest
+docker compose up -d
+score-compose resources get-outputs 'dns.default#example.dns' --format 'http://{{.host}}:8080'
 ```
