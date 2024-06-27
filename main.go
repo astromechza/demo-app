@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"html/template"
@@ -21,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -62,7 +64,7 @@ func (g *Globals) GetRequestCount() uint64 {
 
 var DefaultGlobals Globals
 var RedisClient *redis.Client
-var PostgresPool *pgxpool.Pool
+var DatabaserImpl Databaser
 
 func mainInner() error {
 	listenAddress := flag.String("listen", DefaultListenAddr, "the address to listen on")
@@ -71,6 +73,7 @@ func mainInner() error {
 	motdString := flag.String("motd", "Hello World", "specify a message of the day, prefix with '@' to read from a file")
 	redisString := flag.String("redis", "", "Optional redis url 'redis://<user>:<pass>@<host>:<port>'")
 	postgresString := flag.String("postgres", "", "Optional postgres url 'postgres://<user>:<pass>@<host>:<port>/<database>'")
+	mysqlString := flag.String("mysql", "", "Optional mysql url 'username:password@tcp(host:port)/dbname'")
 
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -168,13 +171,19 @@ func mainInner() error {
 		RedisClient = redis.NewClient(opt)
 	}
 
+	var err error
 	if postgresString != nil && *postgresString != "" {
 		slog.Info("Parsing postgres string", "url", *postgresString)
-		dbPool, err := pgxpool.New(context.Background(), *postgresString)
+		DatabaserImpl, err = NewPostgresDb(*postgresString)
 		if err != nil {
 			return errors.Wrap(err, "failed to start postgres pool")
 		}
-		PostgresPool = dbPool
+	} else if mysqlString != nil && *mysqlString != "" {
+		slog.Info("Parsing mysql string", "url", *mysqlString)
+		DatabaserImpl, err = NewMysqlDb(*mysqlString)
+		if err != nil {
+			return errors.Wrap(err, "failed to connect via mysql")
+		}
 	}
 
 	listener, err := net.Listen("tcp", *listenAddress)
@@ -293,10 +302,11 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
   To change the message of the day, redeploy with <code>--motd=..</code> or <code>$OVERRIDE_MOTD=..</code> or to change the background color, redeploy with <code>--color=..</code> or <code>$OVERRIDE_COLOR=..</code> .
   An optional <code>--redis</code> or <code>$OVERRIDE_REDIS</code> can provide a redis:// connection string which will be used below to increment a counter on each request.
   An optional <code>--postgres</code> or <code>$OVERRIDE_POSTGRES</code> can Provide a postgres:// connection string which will be used to test a database. 
+  OR an optional <code>--mysql</code> or <code>$OVERRIDE_MYSQL</code> can Provide a mysql DSN string which will be used to test a database. 
   </p>
 
   <p>Redis counter result: <code>{{ .RedisResult }}</code> .</p>
-  <p>Postgres table count result: <code>{{ .PostgresResult }}</code> .</p>
+  <p>Database table count result: <code>{{ .DatabaseResult }}</code> .</p>
 
  <hr>
 {{ if .Detail }}
@@ -357,18 +367,14 @@ func mainPage(c echo.Context) error {
 		}
 	}
 
-	pgResult := "<no postgres pool configured>"
-	if PostgresPool != nil {
+	var err error
+	dbResult := "<no postgres pool configured>"
+	if DatabaserImpl != nil {
 		subCtx, cancel := context.WithTimeout(c.Request().Context(), time.Second*3)
 		defer cancel()
-		var output int
-		if err := PostgresPool.QueryRow(subCtx, `
-SELECT COUNT(*) FROM information_schema.tables
-WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema');
-`).Scan(&output); err != nil {
-			pgResult = err.Error()
-		} else {
-			pgResult = strconv.Itoa(output)
+		dbResult, err = DatabaserImpl.Check(subCtx)
+		if err != nil {
+			dbResult = err.Error()
 		}
 	}
 
@@ -386,9 +392,65 @@ WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'informat
 		"Detail":         c.Request().URL.Query().Get("detail") != "",
 		"RefreshSeconds": refreshSeconds,
 		"RedisResult":    redisResult,
-		"PostgresResult": pgResult,
+		"DatabaseResult": dbResult,
 	}); err != nil {
 		return errors.Wrap(err, "failed to template")
 	}
 	return nil
+}
+
+type Databaser interface {
+	Check(ctx context.Context) (string, error)
+}
+
+type PostgresDb struct {
+	Pool *pgxpool.Pool
+}
+
+func NewPostgresDb(cs string) (*PostgresDb, error) {
+	dbPool, err := pgxpool.New(context.Background(), cs)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start postgres pool")
+	}
+	return &PostgresDb{Pool: dbPool}, nil
+}
+
+func (p *PostgresDb) Check(ctx context.Context) (string, error) {
+	subCtx, cancel := context.WithTimeout(ctx, time.Second*3)
+	defer cancel()
+	var output int
+	if err := p.Pool.QueryRow(subCtx, `
+SELECT COUNT(*) FROM information_schema.tables
+WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema');
+`).Scan(&output); err != nil {
+		return "", err
+	} else {
+		return strconv.Itoa(output), nil
+	}
+}
+
+type MysqlDb struct {
+	Db *sql.DB
+}
+
+func NewMysqlDb(cs string) (*MysqlDb, error) {
+	db, err := sql.Open("mysql", cs)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to connect mysql")
+	}
+	return &MysqlDb{Db: db}, nil
+}
+
+func (p *MysqlDb) Check(ctx context.Context) (string, error) {
+	subCtx, cancel := context.WithTimeout(ctx, time.Second*3)
+	defer cancel()
+	var output int
+	if err := p.Db.QueryRowContext(subCtx, `
+SELECT COUNT(*) FROM information_schema.tables
+WHERE table_schema = 'public';
+`).Scan(&output); err != nil {
+		return "", err
+	} else {
+		return strconv.Itoa(output), nil
+	}
 }

@@ -12,8 +12,8 @@ and can output various facts about the request and server. This is great for dem
 - **Load-balancing between replicas**
   - The HTTP endpoint and readiness checks can be used as a load balancing target.
   - The HTTP page reloads itself every few seconds to continuously generate requests.
-- **Demonstrating a Redis and/or Postgres connection**
-  - A counter is stored in Redis, and a query is performed against postgres to validate the connection.
+- **Demonstrating a Redis and/or Mysql/Postgres connection**
+  - A counter is stored in Redis, and a query is performed against a database to validate the connection.
 
 ![screenshot of demo-app](./screenshot.png)
 
@@ -46,6 +46,8 @@ The following flags are available and may also be set through the `OVERRIDE_<fla
     	specify a message of the day, prefix with '@' to read from a file (default "Hello World")
   -postgres string
     	Optional postgres url 'postgres://<user>:<pass>@<host>:<port>/<database>'
+  -mysql string
+    	Optional postgres url '<user>:<pass>@tcp(<host>:<port>)/<database>'
   -proxy string
     	forward the request to the given http or https endpoint
   -redis string

@@ -6,7 +6,8 @@ containers:
     image: .
     variables:
       OVERRIDE_REDIS: "redis://${resources.cache.username}:${resources.cache.password}@${resources.cache.host}:${resources.cache.port}"
-      OVERRIDE_POSTGRES: "postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/${resources.db.database}"
+      OVERRIDE_POSTGRES: "postgres://${resources.db1.username}:${resources.db1.password}@${resources.db1.host}:${resources.db1.port}/${resources.db1.database}"
+      OVERRIDE_MYSQL: "${resources.db2.username}:${resources.db2.password}@tcp(${resources.db2.host}:${resources.db2.port})/${resources.db2.database}"
 service:
   ports:
     web:
@@ -22,5 +23,7 @@ resources:
       port: 8080
   cache:
     type: redis
-  db:
+  db1:
     type: postgres
+  db2:
+    type: mysql
