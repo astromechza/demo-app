@@ -1,0 +1,15 @@
+version: 2
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - id: demo-app
+    binary: demo-app
+    main: ./
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - linux_amd64_v1
+      - linux_arm64
+      - darwin_amd64_v1
+      - darwin_arm64

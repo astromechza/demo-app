@@ -26,11 +26,5 @@ jobs:
         distribution: goreleaser
         version: '~> v2'
         args: release --clean
-        goos:
-        - darwin
-        - linux
-        goarch:
-        - amd64
-        - arm64
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
