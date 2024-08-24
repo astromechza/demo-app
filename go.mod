@@ -3,6 +3,7 @@ module github.com/astromechza/demo-app
 go 1.21.0
 
 require (
+	github.com/elnormous/contenttype v1.0.4
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/labstack/echo/v4 v4.11.4

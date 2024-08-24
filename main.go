@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -22,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/elnormous/contenttype"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -347,6 +349,10 @@ var mainTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
  </body>
 </html>`))
 
+var applicationJsonType = contenttype.NewMediaType(echo.MIMEApplicationJSON)
+var textHtmlType = contenttype.NewMediaType(echo.MIMETextHTML)
+var acceptableTypes = []contenttype.MediaType{applicationJsonType, textHtmlType}
+
 func mainPage(c echo.Context) error {
 	buff := new(bytes.Buffer)
 	if err := c.Request().Write(buff); err != nil {
@@ -384,19 +390,38 @@ func mainPage(c echo.Context) error {
 		refreshSeconds = 5
 	}
 
-	if err := mainTemplate.Execute(c.Response(), map[string]interface{}{
-		"Globals":        &DefaultGlobals,
-		"RequestId":      c.Response().Header().Get("X-Request-ID"),
-		"Request":        buff.String(),
-		"RenderedAt":     renderedAt,
-		"Detail":         c.Request().URL.Query().Get("detail") != "",
-		"RefreshSeconds": refreshSeconds,
-		"RedisResult":    redisResult,
-		"DatabaseResult": dbResult,
-	}); err != nil {
-		return errors.Wrap(err, "failed to template")
+	acceptable, _, _ := contenttype.GetAcceptableMediaType(c.Request(), acceptableTypes)
+	if acceptable.Equal(textHtmlType) {
+		c.Response().Header().Set("Content-Type", echo.MIMETextHTMLCharsetUTF8)
+		if err := mainTemplate.Execute(c.Response(), map[string]interface{}{
+			"Globals":        &DefaultGlobals,
+			"RequestId":      c.Response().Header().Get("X-Request-ID"),
+			"Request":        buff.String(),
+			"RenderedAt":     renderedAt,
+			"Detail":         c.Request().URL.Query().Get("detail") != "",
+			"RedisResult":    redisResult,
+			"DatabaseResult": dbResult,
+		}); err != nil {
+			return errors.Wrap(err, "failed to template")
+		}
+		return nil
+	} else if acceptable.Equal(applicationJsonType) {
+		c.Response().Header().Set("Content-Type", echo.MIMEApplicationJSON)
+		e := json.NewEncoder(c.Response())
+		e.SetIndent("", "  ")
+		if err := e.Encode(map[string]interface{}{
+			"RequestId":      c.Response().Header().Get("X-Request-ID"),
+			"Globals":        &DefaultGlobals,
+			"RawRequest":     buff.String(),
+			"RedisResult":    redisResult,
+			"DatabaseResult": dbResult,
+		}); err != nil {
+			return errors.Wrap(err, "failed to template")
+		}
+		return nil
+	} else {
+		return c.NoContent(http.StatusNotAcceptable)
 	}
-	return nil
 }
 
 type Databaser interface {
