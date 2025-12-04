@@ -8,6 +8,14 @@ containers:
       OVERRIDE_REDIS: "redis://${resources.cache.username}:${resources.cache.password}@${resources.cache.host}:${resources.cache.port}"
       OVERRIDE_POSTGRES: "postgres://${resources.db1.username}:${resources.db1.password}@${resources.db1.host}:${resources.db1.port}/${resources.db1.database}"
       OVERRIDE_MYSQL: "${resources.db2.username}:${resources.db2.password}@tcp(${resources.db2.host}:${resources.db2.port})/${resources.db2.database}"
+    livenessProbe:
+      httpGet:
+        port: 8080
+        path: /livez
+    readinessProbe:
+      httpGet:
+        port: 8080
+        path: /readyz
 service:
   ports:
     web:
