@@ -260,6 +260,37 @@ func mainInner() error {
 	// compress response body if acceptable
 	echoServer.Use(middleware.Gzip())
 
+	echoServer.GET("/livez", echo.HandlerFunc(func(c echo.Context) error {
+		_, err := c.Response().Write([]byte("{}"))
+		return err
+	}))
+
+	echoServer.GET("/readyz", echo.HandlerFunc(func(c echo.Context) error {
+		subCtx, cancel := context.WithTimeout(c.Request().Context(), time.Second*3)
+		defer cancel()
+		if RedisClient != nil {
+			_, err := RedisClient.Get(subCtx, "counter").Result()
+			if err != nil {
+				if !errors.Is(err, redis.Nil) {
+					c.Response().WriteHeader(http.StatusBadGateway)
+					return json.NewEncoder(c.Response()).Encode(map[string]any{
+						"error": fmt.Sprintf("failed to get redis key: %v", err.Error()),
+					})
+				}
+			}
+		}
+		if DatabaserImpl != nil {
+			if _, err := DatabaserImpl.Check(c.Request().Context()); err != nil {
+				c.Response().WriteHeader(http.StatusBadGateway)
+				return json.NewEncoder(c.Response()).Encode(map[string]any{
+					"error": fmt.Sprintf("failed to check database: %v", err.Error()),
+				})
+			}
+		}
+		_, err := c.Response().Write([]byte("{}"))
+		return err
+	}))
+
 	echoServer.GET("/", mainPage)
 
 	go func() {

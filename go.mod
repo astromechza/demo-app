@@ -1,6 +1,6 @@
 module github.com/astromechza/demo-app
 
-go 1.21.0
+go 1.25.5
 
 require (
 	github.com/elnormous/contenttype v1.0.4
