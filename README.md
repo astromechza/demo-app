@@ -54,6 +54,11 @@ The following flags are available and may also be set through the `OVERRIDE_<fla
     	Optional redis url 'redis://<user>:<pass>@<host>:<port>'
 ```
 
+## Probes
+
+- `/livez`: returns a very basic server liveness check.
+- `/readyz`: returns a health check over the database and redis connection if configured.
+
 ## Running with Score
 
 A [Score](https://score.dev/) file is provided in [score.yaml](./score.yaml) which can be used to easily run this demo
