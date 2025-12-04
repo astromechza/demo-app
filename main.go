@@ -268,6 +268,7 @@ func mainInner() error {
 	echoServer.GET("/readyz", echo.HandlerFunc(func(c echo.Context) error {
 		subCtx, cancel := context.WithTimeout(c.Request().Context(), time.Second*3)
 		defer cancel()
+		out := make(map[string]any)
 		if RedisClient != nil {
 			_, err := RedisClient.Get(subCtx, "counter").Result()
 			if err != nil {
@@ -278,6 +279,7 @@ func mainInner() error {
 					})
 				}
 			}
+			out["redis"] = "ok"
 		}
 		if DatabaserImpl != nil {
 			if _, err := DatabaserImpl.Check(c.Request().Context()); err != nil {
@@ -286,9 +288,9 @@ func mainInner() error {
 					"error": fmt.Sprintf("failed to check database: %v", err.Error()),
 				})
 			}
+			out["database"] = "ok"
 		}
-		_, err := c.Response().Write([]byte("{}"))
-		return err
+		return json.NewEncoder(c.Response()).Encode(out)
 	}))
 
 	echoServer.GET("/", mainPage)
@@ -432,6 +434,7 @@ func mainPage(c echo.Context) error {
 			"Detail":         c.Request().URL.Query().Get("detail") != "",
 			"RedisResult":    redisResult,
 			"DatabaseResult": dbResult,
+			"RefreshSeconds": refreshSeconds,
 		}); err != nil {
 			return errors.Wrap(err, "failed to template")
 		}
