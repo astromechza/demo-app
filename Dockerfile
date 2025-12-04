@@ -5,6 +5,7 @@ RUN go mod download
 COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o /demo-app
 
-FROM alpine
+FROM alpine:3
 COPY --from=builder /demo-app /demo-app
+USER nobody
 ENTRYPOINT ["/demo-app"]
